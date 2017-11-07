@@ -2,8 +2,12 @@ module Main exposing (main)
 
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
+import Html exposing (..)
+import Keyboard
+import Char
+import Time exposing (Time)
 
-import Game exposing (Game, Block(..), Point2D)
+import Game exposing (Game, Block(..), Direction(..), Point2D)
 
 -- Constants
 
@@ -17,6 +21,8 @@ blockColor blk =
 
 screenWidth = blockSize * game.width
 screenHeight = blockSize * game.height
+
+tickLength = Time.second / 2
 
 -- Helper functions
 
@@ -52,7 +58,41 @@ square x y blk =
 
 game = Game.init
 
+type Event =
+  Keypress Char
+  | Tick Time
+
 main =
+  Html.program {
+    init = (Game.init, Cmd.none),
+    update = update,
+    view = view,
+    subscriptions = subscriptions
+  }
+
+update event game =
+  let
+    nextState =
+      if Game.finished game then
+        Game.init
+      else
+        case event of
+          Tick _ -> Game.step game
+          Keypress 'a' -> Game.input 0 Left game
+          Keypress 'd' -> Game.input 0 Right game
+          Keypress 'w' -> Game.input 0 Up game
+          Keypress 's' -> Game.input 0 Down game
+          Keypress _ -> game
+  in
+    (nextState, Cmd.none)
+
+subscriptions _ =
+  Sub.batch [
+    Keyboard.presses (Char.fromCode >> Keypress),
+    Time.every tickLength Tick
+  ]
+
+view game =
   svg
     [
       version "1.1",
