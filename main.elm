@@ -3,6 +3,7 @@ module Main exposing (main)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import Html exposing (..)
+import Html.Attributes exposing (..)
 import Keyboard
 import Char
 import Time exposing (Time)
@@ -11,18 +12,28 @@ import Game exposing (Game, Block(..), Direction(..), Point2D)
 
 -- Constants
 
-blockSize = 25
-blockColor blk =
+blockSize = 35
+frameSize = 4
+centerSize = 18
+fgColor blk =
   case blk of
-    None -> "#93a0f2"
-    Apple -> "#cc1414"
+    None -> "#657A6E"
+    Apple -> "#a82d43"
     Obstacle -> "#000"
-    Player _ -> "#27db13"
+    Player _ -> "#060000"
+bgColor blk =
+  case blk of
+    None -> "#758B7A"
+    Apple -> "#758B7A"
+    Obstacle -> "#000"
+    Player _ -> "#758B7A"
+
+tickLength = Time.second / 2
 
 screenWidth = blockSize * game.width
 screenHeight = blockSize * game.height
 
-tickLength = Time.second / 2
+centerPosition = (blockSize - centerSize) // 2
 
 -- Helper functions
 
@@ -39,20 +50,32 @@ pointsListToString points =
 
 square : Int -> Int -> Block -> Svg msg
 square x y blk =
-  polygon
-    [
-      fill <| blockColor blk,
-      stroke "#00f",
-      points <|
-        pointsListToString
-          [
-            Point2D (x*blockSize) (y*blockSize),
-            Point2D (x*blockSize + blockSize - 1) (y*blockSize),
-            Point2D (x*blockSize + blockSize - 1) (y*blockSize + blockSize - 1),
-            Point2D (x*blockSize) (y*blockSize + blockSize - 1)
-          ]
-    ]
+  g
     []
+    [
+      rect
+        [
+          fill (bgColor blk),
+          stroke (fgColor blk),
+          strokeWidth (toString frameSize),
+          Svg.Attributes.x (toString (x*blockSize + frameSize)),
+          Svg.Attributes.y (toString (y*blockSize + frameSize)),
+          Svg.Attributes.width (toString (blockSize - frameSize)),
+          Svg.Attributes.height (toString (blockSize - frameSize))
+        ]
+        [],
+      rect
+        [
+          fill (fgColor blk),
+          stroke "none",
+          strokeWidth "0",
+          Svg.Attributes.x (toString (x*blockSize + centerPosition + frameSize//2)),
+          Svg.Attributes.y (toString (y*blockSize + centerPosition + frameSize//2)),
+          Svg.Attributes.width (toString centerSize),
+          Svg.Attributes.height (toString centerSize)
+        ]
+        []
+    ]
 
 -- Main
 
@@ -93,18 +116,29 @@ subscriptions _ =
   ]
 
 view game =
-  svg
+  Html.div
     [
-      version "1.1",
-      x "0",
-      y "0",
-      width (toString screenWidth),
-      height (toString screenHeight),
-      viewBox ("0 0 " ++ toString screenWidth ++ " " ++ toString screenHeight)
+      Svg.Attributes.style "font-size: 0; vertical-align: top"
     ]
-    (
-      listProduct
-        (List.range 0 (game.width - 1))
-        (List.range 0 (game.height - 1))
-      |> List.map (\(x,y) -> square x y (Game.at (Point2D x y) game))
-    )
+    [
+      svg
+        [
+          version "1.1",
+          x "0",
+          y "0",
+          Svg.Attributes.width (toString (screenWidth + frameSize)),
+          Svg.Attributes.height (toString (screenHeight + frameSize)),
+          viewBox (
+            "0 0 " ++
+            toString (screenWidth + frameSize) ++
+            " " ++
+            toString (screenHeight + frameSize)
+          )
+        ]
+        (
+          listProduct
+            (List.range 0 (game.width - 1))
+            (List.range 0 (game.height - 1))
+          |> List.map (\(x,y) -> square x y (Game.at (Point2D x y) game))
+        )
+    ]

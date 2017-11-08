@@ -18,6 +18,14 @@ import Tuple exposing (first, second)
 size = 25
 
 type Direction = Left | Right | Up | Down
+opposite : Direction -> Direction
+opposite direction =
+  case direction of
+    Left -> Right
+    Right -> Left
+    Up -> Down
+    Down -> Up
+
 type Block = None | Apple | Obstacle | Player Int
 type alias Point2D = {x : Int, y : Int}
 
@@ -26,7 +34,8 @@ type alias Snake =
     head : Point2D,
     cells : List Point2D, -- from head to tail, without head itself
     additionalLength : Int,
-    facing: Direction
+    facing: Direction,
+    pendingFacing: Direction
   }
 createSnake : Point2D -> Snake
 createSnake cell =
@@ -34,16 +43,28 @@ createSnake cell =
     head = cell,
     cells = [],
     additionalLength = 0,
-    facing = Down
+    facing = Down,
+    pendingFacing = Down
   }
 
 updateSnakeFacing : Direction -> Snake -> Snake
 updateSnakeFacing newFacing snake =
   {snake | facing = newFacing}
+
+updateSnakePendingFacing : Direction -> Snake -> Snake
+updateSnakePendingFacing newFacing snake =
+  {snake | pendingFacing = newFacing}
+
 snakeOnCell : Point2D -> Snake -> Bool
 snakeOnCell cell snake =
   (snake.head :: snake.cells)
   |> List.member cell
+
+snakeOnBoard : Game -> Snake -> Bool
+snakeOnBoard game snake =
+  List.all
+    (\cell -> cell.x >= 0 && cell.y >= 0 && cell.x < game.width && cell.y < game.height)
+    (snake.head :: snake.cells)
 
 type alias Game =
   {
@@ -75,6 +96,12 @@ init =
 
 stepSnake snake =
   let
+    turn snake =
+      if not (opposite snake.facing == snake.pendingFacing) then
+        {snake | facing = snake.pendingFacing}
+      else
+        {snake | pendingFacing = snake.facing}
+
     moveForward snake =
       let
         oldHead = snake.head
@@ -101,6 +128,7 @@ stepSnake snake =
         {snake | additionalLength = snake.additionalLength - 1}
   in
     snake
+    |> turn
     |> moveForward
     |> cutTail
 
@@ -108,51 +136,65 @@ step : Game -> Game
 step game =
   if game.losers == [] then
     let
+      stepSnakes : Game -> Game
       stepSnakes game =
         game |> updateGameSnakes (List.map stepSnake game.snakes)
 
-      -- Enlarge all needed snakes, return new snakes and if the apple is eaten
-      eatApple : Point2D -> List Snake -> (Bool, List Snake)
-      eatApple apple snakes =
+      checkCollisions : Game -> Game
+      checkCollisions game =
+        List.foldl
+          (
+            \(i, snake) game ->
+              if snakeOnBoard game snake then
+                game
+              else
+                {game | losers = game.losers ++ [i]}
+          )
+          game
+          (List.map2 (,) (List.range 0 (List.length game.snakes - 1)) game.snakes)
+
+      -- Check every snake against given apple
+      eatApple : Point2D -> Game -> Game
+      eatApple apple game =
         let
-          newSnakes =
-            snakes
-            |> List.map
-                 (\snake ->
-                   if snakeOnCell apple snake then
-                     (
-                       True,
-                       {snake | additionalLength = snake.additionalLength + 1}
-                     )
-                   else
-                     (False, snake))
+          whoAteApple =
+            List.map
+              (
+                \snake ->
+                  if snakeOnCell apple snake then
+                    (
+                      True,
+                      {snake | additionalLength = snake.additionalLength + 1}
+                    )
+                  else
+                    (False, snake)
+              )
+              game.snakes
+
+          newApples =
+            if List.any first whoAteApple then
+              List.filter
+                ((/=) apple)
+                game.apples
+            else
+              game.apples
+
+          newSnakes = List.map second whoAteApple
         in
-          (List.any first newSnakes, List.map second newSnakes)
+          {game | snakes = newSnakes, apples = newApples}
 
       eatApples : Game -> Game
       eatApples game =
-        let
-          (newSnakes, newApples) =
-            List.foldl
-              (
-                \apple (snakes, apples) ->
-                  let
-                    (eaten, newSnakes) = eatApple apple snakes
-                  in
-                    if eaten then
-                      (newSnakes, apples)
-                    else
-                      (snakes, apples ++ [apple])
-              )
-              (game.snakes, [])
-              game.apples
-        in
-          {game | snakes = newSnakes, apples = newApples}
+        List.foldl
+          eatApple
+          game
+          game.apples
     in
       -- Move snakes
       game
       |> stepSnakes
       -- Check collision w/ walls and obstacles
+      |> checkCollisions
       -- Check collision w/ each other
       -- Check collision w/ apples
       |> eatApples
@@ -165,7 +207,7 @@ input playerNo facing game =
   let
     updateHisSnake i snake =
       if i == playerNo then
-        updateSnakeFacing facing snake
+        updateSnakePendingFacing facing snake
       else
         snake
   in
