@@ -7,6 +7,7 @@ import Html.Attributes exposing (..)
 import Keyboard
 import Char
 import Time exposing (Time)
+import Random exposing (minInt, maxInt)
 
 import Game exposing (Game, Block(..), Direction(..), Point2D)
 
@@ -22,16 +23,9 @@ fgColor blk =
     Obstacle -> "#000"
     Player _ -> "#060000"
 bgColor blk =
-  case blk of
-    None -> "#758B7A"
-    Apple -> "#758B7A"
-    Obstacle -> "#000"
-    Player _ -> "#758B7A"
+  "#9eaea5"
 
 tickLength = Time.second / 2
-
-screenWidth = blockSize * game.width
-screenHeight = blockSize * game.height
 
 centerPosition = (blockSize - centerSize) // 2
 
@@ -79,35 +73,35 @@ square x y blk =
 
 -- Main
 
-game = Game.init
-
 type Event =
-  Keypress Char
+  Start Int
+  | Keypress Char
   | Tick Time
 
 main =
   Html.program {
-    init = (Game.init, Cmd.none),
+    init = (Game.init 1, Random.generate Start (Random.int minInt maxInt)),
     update = update,
     view = view,
     subscriptions = subscriptions
   }
 
 update event game =
-  let
-    nextState =
-      if Game.finished game then
-        Game.init
-      else
-        case event of
-          Tick _ -> Game.step game
-          Keypress 'a' -> Game.input 0 Left game
-          Keypress 'd' -> Game.input 0 Right game
-          Keypress 'w' -> Game.input 0 Up game
-          Keypress 's' -> Game.input 0 Down game
-          Keypress _ -> game
-  in
-    (nextState, Cmd.none)
+  if Game.finished game then
+    (Game.init 1, Random.generate Start (Random.int minInt maxInt))
+  else
+    let
+      nextState =
+    case event of
+      Start seed -> Game.init seed
+      Tick _ -> Game.step game
+      Keypress 'a' -> Game.input 0 Left game
+      Keypress 'd' -> Game.input 0 Right game
+      Keypress 'w' -> Game.input 0 Up game
+      Keypress 's' -> Game.input 0 Down game
+      Keypress _ -> game
+    in
+      (nextState, Cmd.none)
 
 subscriptions _ =
   Sub.batch [
@@ -126,13 +120,13 @@ view game =
           version "1.1",
           x "0",
           y "0",
-          Svg.Attributes.width (toString (screenWidth + frameSize)),
-          Svg.Attributes.height (toString (screenHeight + frameSize)),
+          Svg.Attributes.width (toString (blockSize*game.width + frameSize + 1)),
+          Svg.Attributes.height (toString (blockSize*game.height + frameSize + 1)),
           viewBox (
             "0 0 " ++
-            toString (screenWidth + frameSize) ++
+            toString (blockSize*game.width + frameSize + 1) ++
             " " ++
-            toString (screenHeight + frameSize)
+            toString (blockSize*game.height + frameSize + 1)
           )
         ]
         (

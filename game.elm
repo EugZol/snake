@@ -14,6 +14,7 @@ module Game exposing
 
 import Maybe exposing (..)
 import Tuple exposing (first, second)
+import Random exposing (Seed)
 
 size = 25
 
@@ -73,7 +74,8 @@ type alias Game =
     snakes : List Snake,
     apples : List Point2D,
     obstacles : List Point2D,
-    losers : List Int
+    losers : List Int,
+    seed : Seed
   }
 
 finished : Game -> Bool
@@ -83,15 +85,16 @@ updateGameSnakes : List Snake -> Game -> Game
 updateGameSnakes newSnakes game =
   {game | snakes = newSnakes}
 
-init : Game
-init =
+init : Int -> Game
+init randomInt =
   {
     width = size,
     height = size,
     snakes = [createSnake (Point2D 0 0)],
-    apples = [Point2D 2 2, Point2D 3 3, Point2D 4 4],
+    apples = [],
     obstacles = [],
-    losers = []
+    losers = [],
+    seed = Random.initialSeed randomInt
   }
 
 stepSnake snake =
@@ -189,6 +192,37 @@ step game =
           eatApple
           game
           game.apples
+
+      addApples : Game -> Game
+      addApples game =
+        let
+          (needApple, newSeed) =
+            Random.step (Random.int 1 10) game.seed
+
+          newApples =
+            if needApple == 1 then
+              let
+                emptySpaces =
+                  List.map2
+                    (
+                      \x y -> case at (Point2D x y) game of
+                        None -> (x, y)
+                        _ -> (-1, -1)
+                    )
+                    (List.range 0 (game.width - 1))
+                    (List.range 0 (game.height - 1))
+                  |> List.filter ((/=) (-1, -1))
+
+                (i, _) = Random.step (Random.int 1 (List.length emptySpaces)) newSeed
+                (x, y) = emptySpaces |> List.drop i |> List.head |> withDefault (-1, -1)
+              in
+                case (x, y) of
+                  (-1, -1) -> game.apples
+                  (x, y) -> (Point2D x y) :: game.apples
+            else
+              game.apples
+        in
+          {game | seed = newSeed, apples = newApples}
     in
       -- Move snakes
       game
@@ -196,9 +230,8 @@ step game =
       -- Check collision w/ walls and obstacles
       |> checkCollisions
       -- Check collision w/ each other
-      -- Check collision w/ apples
       |> eatApples
-      -- Add apples
+      |> addApples
   else
     game
 
